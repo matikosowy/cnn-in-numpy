@@ -26,7 +26,7 @@ class Model:
 
             with tqdm(total=len(dataloader), desc=f"Epoch {epoch + 1}/{num_epochs}", unit='batch') as pbar:
                 for batch in dataloader:
-                    avg_loss = train_epoch(self, optimizer, criterion, [batch])
+                    avg_loss = train_one_epoch(self, optimizer, criterion, [batch])
                     epoch_loss += avg_loss
                     pbar.update(1)
 
@@ -34,7 +34,7 @@ class Model:
             print(f"Epoch {epoch + 1}/{num_epochs}, Avg Loss: {avg_epoch_loss:.4f}")
 
 
-def train_epoch(model: Model,
+def train_one_epoch(model: Model,
                 optimizer: Union[SGD, Adam],
                 criterion: Union[CrossEntropyLoss, MSELoss],
                 dataloader: List[Tuple[np.ndarray, np.ndarray]]) -> float:
