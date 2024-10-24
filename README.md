@@ -1,42 +1,42 @@
 # 'Almost' PyTorch in NumPy for Computer Vision
-### (a from scratch implementation of PyTorch's modules for Computer Vision using NumPy)
+### (a from-scratch implementation of PyTorch's modules for Computer Vision using NumPy)
 
 ## Implemented Layers
-- [x] Conv2d
-- [x] Linear
-- [x] BatchNorm2d
-- [x] BatchNorm1d
-- [x] Dropout
-- [x] MaxPool2d
-#### todo:
-- [ ] ConvTranspose2d
+- ✅ Conv2d
+- ✅ Linear
+- ✅ BatchNorm2d
+- ✅ BatchNorm1d
+- ✅ Dropout
+- ✅ MaxPool2d
+#### To Do:
+- ⏳ ConvTranspose2d
 
 ## Implemented Activation Functions
-- [x] ReLU
-- [x] Sigmoid
-- [x] Softmax
-- [x] Flatten
-#### todo:
-- [ ] Tanh
-- [ ] LeakyReLU
+- ✅ ReLU
+- ✅ Sigmoid
+- ✅ Softmax
+- ✅ Flatten
+#### To Do:
+- ⏳ Tanh
+- ⏳ LeakyReLU
 
 ## Implemented Loss Functions
-- [x] CrossEntropyLoss
-- [x] MSELoss
-#### todo:
-- [ ] L1Loss
-- [ ] BCELoss
+- ✅ CrossEntropyLoss
+- ✅ MSELoss
+#### To Do:
+- ⏳ L1Loss
+- ⏳ BCELoss
 
 ## Implemented Optimizers
-- [x] SGD
-- [x] Adam
+- ✅ SGD
+- ✅ Adam
 
 ## Implemented Utils
-- [x] train_one_epoch
-- [x] train (train_one_epoch + validation)
-- [x] Model wrapper (combination of Sequential and Module) 
-#### todo:
-- [ ] DataLoader
-- [ ] Dataset
-- [ ] Model evaluation mode
-- [ ] Training loop: validation loss 
+- ✅ train_one_epoch
+- ✅ train (train_one_epoch + validation)
+- ✅ Model wrapper (combination of Sequential and Module) 
+#### To Do:
+- ⏳ DataLoader
+- ⏳ Dataset
+- ⏳ Model evaluation mode
+- ⏳ Training loop: validation loss
