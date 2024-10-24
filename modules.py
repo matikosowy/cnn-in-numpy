@@ -1,8 +1,5 @@
 import numpy as np
-from typing import Union, Tuple, Optional
-
-# todo:
-# - implement backward passes for all layers
+from typing import Union, Tuple
 
 class Conv2d:
     """
@@ -80,7 +77,7 @@ class Conv2d:
         self.weight_grad = np.zeros_like(self.weight)
         self.bias_grad = np.zeros_like(self.bias) if bias else None
         
-        self.input_shape = None
+        self.cache = {}
 
     def _pad_input(self, x: np.ndarray) -> np.ndarray:
         """Apply padding to input tensor"""
@@ -105,7 +102,7 @@ class Conv2d:
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the convolutional layer.
+        Computes the forward pass of the convolutional layer.
 
         Parameters:
         -----------
@@ -117,8 +114,10 @@ class Conv2d:
         np.ndarray
             Output tensor of shape (batch_size, out_channels, out_height, out_width)
         """
-        self.input_shape = x.shape
         batch_size, in_channels, height, width = x.shape
+
+        # Cache input for backward pass
+        self.cache['input'] = x
 
         # Apply padding
         x_padded = self._pad_input(x)
@@ -150,22 +149,21 @@ class Conv2d:
 
         return output
 
-    def backward(self, grad_output: np.ndarray, input_data: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the convolutional layer.
+        Computes the backward pass of the convolutional layer.
 
         Parameters:
         -----------
         grad_output : np.ndarray
             Gradient of the loss with respect to the output of this layer
-        input_data : np.ndarray
-            The input that was used in the forward pass
 
         Returns:
         --------
         np.ndarray
             Gradient of the loss with respect to the input
         """
+        input_data = self.cache['input']
         batch_size, _, out_height, out_width = grad_output.shape
 
         # Reset gradients
@@ -219,7 +217,11 @@ class Conv2d:
         return grad_input
 
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return f"Conv2d({self.in_channels}, {self.out_channels}, {self.kernel_size})"
 
 
 class Linear:
@@ -264,11 +266,11 @@ class Linear:
         self.weight_grad = np.zeros_like(self.weight)
         self.bias_grad = np.zeros_like(self.bias) if bias else None
 
-        self.input_shape = None
+        self.cache = {}
         
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the linear layer.
+        Computes the forward pass of the linear layer.
 
         Parameters:
         -----------
@@ -280,7 +282,7 @@ class Linear:
         np.ndarray
             Output tensor of shape (batch_size, out_features)
         """
-        self.input_shape = x.shape
+        self.cache['input'] = x
         output = x @ self.weight.T
 
         if self.bias is not None:
@@ -288,9 +290,9 @@ class Linear:
 
         return output
 
-    def backward(self, grad_output: np.ndarray, input_data: np.ndarray) -> np.ndarray:
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """
-        Backward pass of the linear layer.
+        Computes the backward pass of the linear layer.
 
         Parameters:
         -----------
@@ -304,6 +306,8 @@ class Linear:
         np.ndarray
             Gradient of the loss with respect to the input
         """
+        input_data = self.cache['input']
+
         # Reset gradients
         self.weight_grad.fill(0.0)
         if self.bias is not None:
@@ -322,7 +326,11 @@ class Linear:
         return grad_input
         
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return f"Linear({self.in_features}, {self.out_features})"
 
 
 class BatchNorm2d:
@@ -330,10 +338,29 @@ class BatchNorm2d:
     Batch normalization layer for 2D matrices (NCHW format)
 
     Parameters:
+    -----------
+    n_features : int
+        Number of features in the input tensor
+    eps : float
+        Epsilon value for numerical stability
+    momentum : float
+        Momentum for running mean and variance
+    affine : bool
+        Whether to apply an affine transformation
+    training : bool
+        Whether the model is in training mode
 
+    Returns:
+    --------
+    np.ndarray
+        Output tensor of shape (batch_size, n_features, height, width)
     """
-    def __init__(self, n_features: int, eps: float=1e-5, momentum: float=0.1, affine: bool=True,
-                 training: bool=True):
+    def __init__(self, n_features: int,
+                 eps: float=1e-5,
+                 momentum: float=0.1,
+                 affine: bool=True,
+                 training: bool=True
+    ):
         self.n_features = n_features
         self.eps = eps
         self.momentum = momentum
@@ -346,59 +373,297 @@ class BatchNorm2d:
         if affine:
             self.weight = np.ones(n_features)
             self.bias = np.zeros(n_features)
+            self.weight_grad = np.zeros(n_features)
+            self.bias_grad = np.zeros(n_features)
         else:
             self.weight = None
             self.bias = None
+            self.weight_grad = None
+            self.bias_grad = None
+
+        self.cache = {}
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the batch normalization layer.
+        Computes the forward pass of the batch normalization layer.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        ___________
+        x : np.ndarray
+            Input tensor of shape (batch_size, n_features, height, width)
 
         Returns:
-        np.ndarray: Output tensor.
+        ________
+        np.ndarray
+            Output tensor of shape (batch_size, n_features, height, width)
         """
+        self.cache['input'] = x
+
         if self.training:
             mean = np.mean(x, axis=(0, 2, 3), keepdims=True)
             var = np.var(x, axis=(0, 2, 3), keepdims=True)
 
+            # Update running mean and variance
             self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean.squeeze()
             self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var.squeeze()
         else:
             mean = self.running_mean.reshape(1, self.n_features, 1, 1)
             var = self.running_var.reshape(1, self.n_features, 1, 1)
 
-        x_hat = (x - mean) / np.sqrt(var + self.eps)
+        # Normalize
+        x_centered = x - mean
+        std = np.sqrt(var + self.eps)
+        x_normalized = x_centered / std
+
+        self.cache.update({
+            'mean': mean,
+            'var': var,
+            'std': std,
+            'x_centered': x_centered,
+            'x_normalized': x_normalized
+        })
 
         if self.affine:
-            output = (self.weight.reshape(1, self.n_features, 1, 1) * x_hat
+            output = (self.weight.reshape(1, self.n_features, 1, 1) * x_normalized
                       + self.bias.reshape(1, self.n_features, 1, 1))
         else:
-            output = x_hat
+            output = x_normalized
 
         return output
 
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for batch normalization layer.
+
+        Parameters:
+        ___________
+            grad_output: Gradient of the loss with respect to the output
+
+        Returns:
+        ________
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        x = self.cache['input']
+        mean = self.cache['mean']
+        var = self.cache['var']
+        std = self.cache['std']
+        x_centered = self.cache['x_centered']
+        x_norm = self.cache['x_normalized']
+
+        N = x.shape[0] * x.shape[2] * x.shape[3]
+
+        if self.affine:
+            # Gradients with respect to weight and bias
+            self.weight_grad = np.sum(grad_output * x_norm, axis=(0, 2, 3))
+            self.bias_grad = np.sum(grad_output, axis=(0, 2, 3))
+
+            # Adjust grad_output for affine
+            grad_output = grad_output * self.weight.reshape(1, -1, 1, 1)
+
+        # Gradients with respect to input
+        grad_normalized = grad_output
+        grad_var = np.sum(grad_normalized * x_centered * -0.5 * std ** (-3), axis=(0, 2, 3), keepdims=True)
+        grad_mean = np.sum(grad_normalized * -1 / std, axis=(0, 2, 3), keepdims=True)
+
+        grad_input = (grad_normalized / std +
+                      2 * x_centered * grad_var / N +
+                      grad_mean / N)
+
+        return grad_input
+
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return f"BatchNorm2d({self.n_features})"
+
+
+class BathNorm1d:
+    """
+    Batch normalization layer for 1D tensors (NCHW format)
+
+    Parameters:
+    -----------
+    n_features : int
+        Number of features in the input tensor
+    eps : float
+        Epsilon value for numerical stability
+    momentum : float
+        Momentum for running mean and variance
+    affine : bool
+        Whether to apply an affine transformation
+    training : bool
+        Whether the model is in training mode
+
+    Returns:
+    --------
+    np.ndarray
+        Output tensor of shape (batch_size, n_features)
+    """
+    def __init__(self, n_features: int,
+                 eps: float=1e-5,
+                 momentum: float=0.1,
+                 affine: bool=True,
+                 training: bool=True
+    ):
+        self.n_features = n_features
+        self.eps = eps
+        self.momentum = momentum
+        self.affine = affine
+        self.training = training
+
+        self.running_mean = np.zeros(n_features)
+        self.running_var = np.ones(n_features)
+
+        if affine:
+            self.weight = np.ones(n_features)
+            self.bias = np.zeros(n_features)
+            self.weight_grad = np.zeros(n_features)
+            self.bias_grad = np.zeros(n_features)
+        else:
+            self.weight = None
+            self.bias = None
+            self.weight_grad = None
+            self.bias_grad = None
+
+        self.cache = {}
+
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """
+        Computes the forward pass of the batch normalization layer.
+
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor of shape (batch_size, n_features)
+
+        Returns:
+        --------
+        np.ndarray
+            Output tensor of shape (batch_size, n_features)
+        """
+        self.cache['input'] = x
+
+        if self.training:
+            mean = np.mean(x, axis=0, keepdims=True)
+            var = np.var(x, axis=0, keepdims=True)
+
+            # Update running mean and variance
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean.squeeze()
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var.squeeze()
+        else:
+            mean = self.running_mean.reshape(1, self.n_features)
+            var = self.running_var.reshape(1, self.n_features)
+
+        # Normalize
+        x_centered = x - mean
+        std = np.sqrt(var + self.eps)
+        x_normalized = x_centered / std
+
+        self.cache.update({
+            'mean': mean,
+            'var': var,
+            'std': std,
+            'x_centered': x_centered,
+            'x_normalized': x_normalized
+        })
+
+        if self.affine:
+            output = self.weight * x_normalized + self.bias
+        else:
+            output = x_normalized
+
+        return output
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for batch normalization layer.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        x = self.cache['input']
+        mean = self.cache['mean']
+        var = self.cache['var']
+        std = self.cache['std']
+        x_centered = self.cache['x_centered']
+        x_norm = self.cache['x_normalized']
+
+        N = x.shape[0]
+
+        if self.affine:
+            # Gradients with respect to weight and bias
+            self.weight_grad = np.sum(grad_output * x_norm, axis=0)
+            self.bias_grad = np.sum(grad_output, axis=0)
+
+            # Adjust grad_output for affine
+            grad_output = grad_output * self.weight
+
+        # Gradients with respect to input
+        grad_normalized = grad_output
+        grad_var = np.sum(grad_normalized * x_centered * -0.5 * std ** (-3), axis=0, keepdims=True)
+        grad_mean = np.sum(grad_normalized * -1 / std, axis=0, keepdims=True)
+
+        grad_input = (grad_normalized / std +
+                      2 * x_centered * grad_var / N +
+                      grad_mean / N)
+
+        return grad_input
+
+    def __call__(self, x):
+        """Shortcut to the forward method"""
+        return self.forward(x)
+
+    def __str__(self):
+        return f"BatchNorm1d({self.n_features})"
 
 
 class MaxPool2d:
+    """
+    Max pooling layer for 2D matrices (NCHW format)
+
+    Parameters:
+    -----------
+    kernel_size : Union[int, Tuple[int, int]]
+        Size of the pooling kernel
+    stride : Union[int, Tuple[int, int]]
+        Stride of the pooling operation
+
+    Returns:
+    --------
+    np.ndarray
+        Output tensor of shape (batch_size, in_channels, out_height, out_width)
+    """
     def __init__(self, kernel_size: int or tuple = (2, 2), stride: int or tuple = (2, 2)):
         self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
+        self.cache = {}
+
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the max pooling layer.
+        Computes the forward pass of the max pooling layer.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor of shape (batch_size, in_channels, height, width)
 
         Returns:
-        np.ndarray: Output tensor.
+        --------
+        np.ndarray
+            Output tensor of shape (batch_size, in_channels, out_height, out_width)
         """
+        self.cache['input'] = x
         batch_size, in_channels, height, width = x.shape
 
         # Calculate output dimensions
@@ -420,31 +685,161 @@ class MaxPool2d:
 
         return output
 
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for max pooling layer.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        input_data = self.cache['input']
+        batch_size, channels, height, width = input_data.shape
+        _, _, out_height, out_width = grad_output.shape
+
+        grad_input = np.zeros_like(input_data)
+
+        for i in range(out_height):
+            for j in range(out_width):
+                h_start = i * self.stride[0]
+                h_end = h_start + self.kernel_size[0]
+                w_start = j * self.stride[1]
+                w_end = w_start + self.kernel_size[1]
+
+                # Get input slice
+                input_slice = input_data[:, :, h_start:h_end, w_start:w_end]
+
+                # Create mask of where maximum values are
+                mask = (input_slice == np.max(input_slice, axis=(2, 3))
+                        .reshape(batch_size, channels, 1, 1))
+
+                # Distribute gradient
+                grad_input[:, :, h_start:h_end, w_start:w_end] += \
+                    mask * grad_output[:, :, i, j].reshape(batch_size, channels, 1, 1)
+
+        return grad_input
+
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return f"MaxPool2d({self.kernel_size}, {self.stride})"
+
+
+class Dropout:
+    """
+    Dropout layer
+
+    Parameters:
+    -----------
+    p : float
+        Probability of dropping out a neuron
+    training : bool
+        Whether the model is in training mode
+    """
+    def __init__(self, p: float=0.5, training: bool=True):
+        self.p = p
+        self.training = training
+        self.cache = {}
+
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """
+        Computes the forward pass of the dropout layer.
+
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
+
+        Returns:
+        --------
+        np.ndarray
+            Output tensor
+        """
+        if self.training:
+            mask = np.random.rand(*x.shape) > self.p
+            self.cache['mask'] = mask
+            return x * mask
+        else:
+            return x
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for dropout layer.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        mask = self.cache['mask']
+        return grad_output * mask
+
+    def __call__(self, x):
+        """Shortcut to the forward method"""
+        return self.forward(x)
+
+    def __str__(self):
+        return f"Dropout({self.p})"
 
 
 class ReLU:
-    """
-    Rectified Linear Unit (ReLU) activation function
-    """
+    """Rectified Linear Unit (ReLU) activation function"""
     def __init__(self):
-        self.f_relu = np.vectorize(lambda x: np.maximum(0, x))
+        self.cache = {}
         
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the ReLU activation function.
+        Computes the forward pass of the ReLU activation function.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
 
         Returns:
-        np.ndarray: Output tensor.
+        --------
+        np.ndarray
+            Output tensor
         """
-        return self.f_relu(x)
+        self.cache['input'] = x
+        return np.maximum(0, x)
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for ReLU activation function.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        input_data = self.cache['input']
+        return grad_output * (input_data > 0)
     
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return "ReLU()"
 
 
 class Softmax:
@@ -452,25 +847,61 @@ class Softmax:
     Softmax activation function
 
     Parameters:
-    axis (int): Axis across which to apply the softmax function.
+    -----------
+    axis : int
+        Axis along which to compute the softmax
     """
     def __init__(self, axis: int=-1):
-        self.f_softmax = np.vectorize(lambda x: np.exp(x) / np.sum(np.exp(x), axis=axis))
+        self.axis = axis
+        self.cache = {}
         
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the softmax activation function.
+        Computes the forward pass of the softmax activation function.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
 
         Returns:
-        np.ndarray: Output tensor.
+        --------
+        np.ndarray
+            Output tensor
         """
-        return self.f_softmax(x)
+        # For numerical stability
+        shifted_x = x - np.max(x, axis=self.axis, keepdims=True)
+        exp_x = np.exp(shifted_x)
+        softmax_x = exp_x / np.sum(exp_x, axis=self.axis, keepdims=True)
+
+        self.cache['output'] = softmax_x
+        return softmax_x
+
+    def backward(self, grad_output: np.ndarray, input_data: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for softmax activation function.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+        input_data : np.ndarray
+            The input that was used in the forward pass
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        softmax_x = self.cache['output']
+        return grad_output * softmax_x * (1 - softmax_x)
     
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return "Softmax()"
     
 
 class Sigmoid:
@@ -478,22 +909,49 @@ class Sigmoid:
     Sigmoid activation function
     """
     def __init__(self):
-        self.f_sigmoid = np.vectorize(lambda x: 1 / (1 + np.exp(-x)))
+        self.cache = {}
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the sigmoid activation function.
+        Computes the forward pass of the sigmoid activation function.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
 
         Returns:
-        np.ndarray: Output tensor.
+        --------
+        np.ndarray
+            Output tensor
         """
-        return self.f_sigmoid(x)
+        sigmoid_x = 1 / (1 + np.exp(-x))
+        self.cache['output'] = sigmoid_x
+        return sigmoid_x
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for sigmoid activation function.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        sigmoid_x = self.cache['output']
+        return grad_output * sigmoid_x * (1 - sigmoid_x)
     
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return "Sigmoid()"
 
 
 class Flatten:
@@ -501,19 +959,44 @@ class Flatten:
     Flatten layer to flatten the input tensor
     """
     def __init__(self):
-        pass
+        self.cache = {}
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Forward pass of the flatten layer.
+        Computes the forward pass of the flatten layer.
 
-        Args:
-        x (np.ndarray): Input tensor.
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
 
         Returns:
-        np.ndarray: Output tensor.
+        --------
+        np.ndarray
+            Flattened tensor
         """
+        self.cache['input_shape'] = x.shape
         return x.reshape(x.shape[0], -1)
 
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for flatten layer.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        return grad_output.reshape(self.cache['input_shape'])
+
     def __call__(self, x):
+        """Shortcut to the forward method"""
         return self.forward(x)
+
+    def __str__(self):
+        return "Flatten()"
