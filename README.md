@@ -16,16 +16,14 @@
 - ✅ Sigmoid
 - ✅ Softmax
 - ✅ Flatten
-#### To Do:
-- ⏳ Tanh
-- ⏳ LeakyReLU
+- ✅ Tanh
+- ✅ LeakyReLU
 
 ## Implemented Loss Functions
 - ✅ CrossEntropyLoss
 - ✅ MSELoss
-#### To Do:
-- ⏳ L1Loss
-- ⏳ BCELoss
+- ✅ L1Loss
+- ✅ BCELoss
 
 ## Implemented Optimizers
 - ✅ SGD
