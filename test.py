@@ -1,4 +1,5 @@
-from optim import Adam, CrossEntropyLoss
+from optim import Adam
+from losses import CrossEntropyLoss
 import modules as md
 import numpy as np
 from model import Model

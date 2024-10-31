@@ -1,6 +1,7 @@
 from tqdm import tqdm
 from typing import List, Tuple, Union
-from optim import SGD, CrossEntropyLoss, MSELoss, Adam
+from optim import SGD, Adam
+from losses import CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss
 import numpy as np
 
 # todo
@@ -36,7 +37,7 @@ class Model:
 
 def train_one_epoch(model: Model,
                 optimizer: Union[SGD, Adam],
-                criterion: Union[CrossEntropyLoss, MSELoss],
+                criterion: Union[CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss],
                 dataloader: List[Tuple[np.ndarray, np.ndarray]]) -> float:
     """
     Train the model for one epoch.

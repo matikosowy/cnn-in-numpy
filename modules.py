@@ -4,6 +4,10 @@ from typing import Union, Tuple
 class Conv2d:
     """
     Convolutional layer for 2D matrices (NCHW format)
+    N - batch size
+    C - number of channels
+    H - height
+    W - width
 
     Parameters:
     -----------
@@ -188,12 +192,11 @@ class Conv2d:
                 input_slice = input_padded[:, :, h_start:h_end, w_start:w_end]
 
                 # Compute weight gradients
-                for b in range(batch_size):
-                    self.weight_grad += np.einsum(
-                        'chw,o->ochw',
-                        input_slice[b],
-                        grad_output[b, :, i, j]
-                    )
+                self.weight_grad += np.einsum(
+                    'bchw,bo->ochw',
+                    input_slice,
+                    grad_output[:, :, i, j]
+                )
 
                 # Compute input gradients
                 grad_input_padded[:, :, h_start:h_end, w_start:w_end] += np.einsum(
@@ -222,6 +225,163 @@ class Conv2d:
 
     def __str__(self):
         return f"Conv2d({self.in_channels}, {self.out_channels}, {self.kernel_size})"
+
+
+class ConvTranspose2d:
+    """
+    Transposed convolutional layer for 2D matrices (NCHW format)
+    N - batch size
+    C - number of channels
+    H - height
+    W - width
+
+    Parameters:
+    -----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    kernel_size : Union[int, Tuple[int, int]]
+        Size of the convolutional kernel
+    stride : Union[int, Tuple[int, int]]
+        Stride of the convolution
+    padding : Union[str, int]
+        'valid', 'same', or number of padding pixels
+    padding_mode : str
+        'zeros' or 'reflect'
+    bias : bool
+        Whether to include a bias term
+    init : str
+        Weight initialization method ('he' or 'normal')
+    """
+
+    def __init__(self, in_channels: int,
+                 out_channels: int,
+                 kernel_size: Union[int, Tuple[int, int]] = (3, 3),
+                 stride: Union[int, Tuple[int, int]] = (1, 1),
+                 padding: Union[str, int] = 'same',
+                 padding_mode: str = 'zeros',
+                 bias: bool = True,
+                 init: str = 'he'
+                 ):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
+        self.stride = stride if isinstance(stride, tuple) else (stride, stride)
+        self.padding_mode = padding_mode
+
+        # Initialize weights and bias
+        self.weight = np.random.randn(in_channels, out_channels, self.kernel_size[0], self.kernel_size[1])
+
+        if bias:
+            self.bias = np.zeros(out_channels)
+        else:
+            self.bias = None
+
+        if init == 'he':
+            fan_in = in_channels * self.kernel_size[0] * self.kernel_size[1]
+            self.weight *= np.sqrt(2.0 / fan_in)
+        elif init == 'normal':
+            self.weight *= 0.01
+        else:
+            raise ValueError('Invalid initialization method! Use "he" or "normal".')
+
+        # Set padding
+        if padding_mode not in ['zeros', 'reflect']:
+            raise ValueError('Invalid padding mode! Use "zeros" or "reflect".')
+        
+        if isinstance(padding, str):
+            if padding == 'same':
+                self.padding = (
+                    (self.kernel_size[0] - 1) // 2,
+                    (self.kernel_size[1] - 1) // 2
+                )
+            elif padding == 'valid':
+                self.padding = (0, 0)
+            else:
+                raise ValueError('Invalid padding! Use "same", "valid", or an integer.')
+            
+        else:
+            self.padding = (padding, padding)
+            
+        # Initialize gradients
+        self.weight_grad = np.zeros_like(self.weight)
+        self.bias_grad = np.zeros_like(self.bias) if bias else None
+        
+        self.cache = {}
+        
+    def _pad_input(self, x: np.ndarray) -> np.ndarray:
+        """Apply padding to input tensor"""
+        if self.padding == (0, 0):
+            return x
+
+        if self.padding_mode == 'zeros':
+            return np.pad(
+                x,
+                ((0, 0), (0, 0),
+                 (self.padding[0], self.padding[0]),
+                 (self.padding[1], self.padding[1]))
+            )
+        else:
+            return np.pad(
+                x,
+                ((0, 0), (0, 0),
+                 (self.padding[0], self.padding[0]),
+                 (self.padding[1], self.padding[1])),
+                mode='reflect'
+            )
+    
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """
+        Transposed convolutional layer for 2D matrices (NCHW format)
+        N - batch size
+        C - number of channels
+        H - height
+        W - width
+
+        Parameters:
+        -----------
+        in_channels : int
+            Number of input channels
+        out_channels : int
+            Number of output channels
+        kernel_size : Union[int, Tuple[int, int]]
+            Size of the convolutional kernel
+        stride : Union[int, Tuple[int, int]]
+            Stride of the convolution
+        padding : Union[str, int]
+            'valid', 'same', or number of padding pixels
+        padding_mode : str
+            'zeros' or 'reflect'
+        bias : bool
+            Whether to include a bias term
+        init : str
+            Weight initialization method ('he' or 'normal')
+        """
+        pass
+    
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass of the transposed convolutional layer.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        pass
+    
+    def __call__(self, x):
+        """Shortcut to the forward method"""
+        return self.forward(x)
+    
+    def __str__(self):
+        return f"ConvTranspose2d({self.in_channels}, {self.out_channels}, {self.kernel_size})"
 
 
 class Linear:
@@ -314,7 +474,7 @@ class Linear:
             self.bias_grad.fill(0.0)
 
         # Compute weight gradients
-        self.weight_grad = np.einsum('bi,bj->ij', grad_output, input_data)
+        self.weight_grad = grad_output.T @ input_data
 
         # Compute bias gradients
         if self.bias is not None:
@@ -336,6 +496,10 @@ class Linear:
 class BatchNorm2d:
     """
     Batch normalization layer for 2D matrices (NCHW format)
+    N - batch size
+    C - number of channels
+    H - height
+    W - width
 
     Parameters:
     -----------
@@ -482,7 +646,9 @@ class BatchNorm2d:
 
 class BathNorm1d:
     """
-    Batch normalization layer for 1D tensors (NCHW format)
+    Batch normalization layer for 1D tensors (NC format)
+    N - batch size
+    C - number of channels
 
     Parameters:
     -----------
@@ -630,6 +796,10 @@ class BathNorm1d:
 class MaxPool2d:
     """
     Max pooling layer for 2D matrices (NCHW format)
+    N - batch size
+    C - number of channels
+    H - height
+    W - width
 
     Parameters:
     -----------
@@ -643,7 +813,9 @@ class MaxPool2d:
     np.ndarray
         Output tensor of shape (batch_size, in_channels, out_height, out_width)
     """
-    def __init__(self, kernel_size: int or tuple = (2, 2), stride: int or tuple = (2, 2)):
+    def __init__(self, kernel_size: Union[int, tuple] = (2, 2),
+                 stride: Union[int, tuple] = (2, 2)
+        ):
         self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
@@ -952,6 +1124,108 @@ class Sigmoid:
 
     def __str__(self):
         return "Sigmoid()"
+    
+
+class Tanh:
+    """Hyperbolic tangent activation function"""
+    def __init__(self):
+        self.cache = {}
+        
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """
+        Computes the forward pass of the tanh activation function.
+
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
+
+        Returns:
+        --------
+        np.ndarray
+            Output tensor
+        """
+        tanh_x = np.tanh(x)
+        self.cache['output'] = tanh_x
+        return tanh_x
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for tanh activation function.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        tanh_x = self.cache['output']
+        return grad_output * (1 - tanh_x ** 2)
+    
+    def __call__(self, x):
+        """Shortcut to the forward method"""
+        return self.forward(x)
+    
+    def __str__(self):
+        return "Tanh()"
+    
+
+class LeakyReLU:
+    """Leaky Rectified Linear Unit (Leaky ReLU) activation function
+    
+    Parameters:
+    -----------
+    slope : float
+        Slope of the negative part of the function
+    """
+    def __init__(self, slope: float=0.01):
+        self.slope = slope
+        self.cache = {}
+        
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """
+        Computes the forward pass of the Leaky ReLU activation function.
+
+        Parameters:
+        -----------
+        x : np.ndarray
+            Input tensor
+
+        Returns:
+        --------
+        np.ndarray
+            Output tensor
+        """
+        self.cache['input'] = x
+        return np.where(x > 0, x, self.slope * x)
+
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """
+        Computes the backward pass for Leaky ReLU activation function.
+
+        Parameters:
+        -----------
+        grad_output : np.ndarray
+            Gradient of the loss with respect to the output of this layer
+
+        Returns:
+        --------
+        np.ndarray
+            Gradient of the loss with respect to the input
+        """
+        input_data = self.cache['input']
+        return np.where(input_data > 0, grad_output, self.slope * grad_output)
+    
+    def __call__(self, x):
+        """Shortcut to the forward method"""
+        return self.forward(x)
+    
+    def __str__(self):
+        return f"LeakyReLU({self.alpha})"
 
 
 class Flatten:
