@@ -1,7 +1,7 @@
 from tqdm import tqdm
 from typing import List, Tuple, Union
-from optim import SGD, Adam
-from losses import CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss
+from torchclone.optim import SGD, Adam
+from torchclone.losses import CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss
 import numpy as np
 
 # todo

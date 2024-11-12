@@ -1,8 +1,8 @@
-from optim import Adam
-from losses import CrossEntropyLoss
-import modules as md
+from torchclone.optim import Adam
+from torchclone.losses import CrossEntropyLoss
+import torchclone.modules as md
 import numpy as np
-from model import Model
+from torchclone.model import Model
 
 if __name__ == '__main__':
     # Define model

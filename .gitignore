@@ -2,3 +2,4 @@
 .DS_Store
 .cadence
 .data
+__pycache__/
