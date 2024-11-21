@@ -3,6 +3,7 @@ from torchclone.losses import CrossEntropyLoss
 import torchclone.modules as md
 import numpy as np
 from torchclone.model import Model
+from torchclone.data import Dataset, DataLoader
 
 if __name__ == '__main__':
     # Define model
@@ -23,15 +24,32 @@ if __name__ == '__main__':
     criterion = CrossEntropyLoss()
 
     # Create dummy data
-    batch_size = 32
-    input_shape = (batch_size, 3, 32, 32)
+    input_shape = (32, 3, 32, 32)
     num_classes = 10
 
-    dummy_data = [
-        (np.random.randn(*input_shape),
-         np.random.randint(0, num_classes, size=batch_size))
-        for _ in range(10)
-    ]
+    dummy_inputs = np.random.randn(*input_shape)
+    dummy_labels = np.random.randint(0, num_classes, input_shape[0])
+
+    validation_inputs = np.random.randn(*input_shape)
+    validation_labels = np.random.randint(0, num_classes, input_shape[0])
+
+    # Create datasets and dataloaders
+    batch_size = 8
+    dataset = Dataset(dummy_inputs, dummy_labels)
+    dataloader = DataLoader(dataset, batch_size=batch_size)
+
+    val_dataset = Dataset(validation_inputs, validation_labels)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
 
     # Train model
-    model.train(optimizer, criterion, dummy_data, num_epochs=5)
+    model.train(optimizer, criterion, dataloader, num_epochs=20, val=val_dataloader)
+
+    # Evaluate model
+    model.eval(dataloader, criterion)
+
+    # Predict
+    y_hat = model.predict(dummy_inputs)
+    pred_classes = np.argmax(y_hat, axis=1)
+
+    print("Predicted: " ,pred_classes)
+    print("Actual:    ", dummy_labels)

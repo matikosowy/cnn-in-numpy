@@ -1,29 +1,54 @@
-# todo:
-# 1. implement Dataset class
-# 2. implement DataLoader class
-
-# import torch
-# from torch.utils.data import Dataset
-#
-# class MNISTDataset(Dataset):
-#     def __init__(self, images, labels):
-#         self.images = torch.tensor(images, dtype=torch.float32)
-#         self.labels = torch.tensor(labels, dtype=torch.long)
-#
-#     def __len__(self):
-#         return len(self.labels)
-#
-#     def __getitem__(self, idx):
-#         return self.images[idx], self.labels[idx]
-#
-# from torch.utils.data import DataLoader
-#
-# batch_size = 4
-# dataloader = DataLoader(mnist_dataset, batch_size=batch_size, shuffle=True)
-
+import numpy as np
 
 class Dataset:
-    pass
+    """
+    Dataset class to hold features and labels.
+
+    Parameters:
+    -----------
+    x: np.ndarray
+        Features
+    y: np.ndarray
+        Labels
+    """
+    def __init__(self, x: np.ndarray, y: np.ndarray):
+        self.x = x
+        self.y = y
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx: int):
+        return self.x[idx], self.y[idx]
 
 class DataLoader:
-    pass
+    """
+    DataLoader class to load data in batches.
+
+    Parameters:
+    -----------
+    dataset: Dataset
+        Dataset object
+    batch_size: int
+        Batch size
+    shuffle: bool
+        Shuffle data or not
+    """
+    def __init__(self, dataset: Dataset, batch_size: int=32, shuffle=True):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.indices = np.arange(len(self.dataset))
+
+        if self.shuffle:
+            np.random.shuffle(self.indices)
+
+    def __len__(self):
+        return len(self.dataset) // self.batch_size
+
+    def __iter__(self):
+        for i in range(0, len(self.dataset), self.batch_size):
+            batch_indices = self.indices[i:i+self.batch_size]
+            batch_x = [self.dataset[j][0] for j in batch_indices]
+            batch_y = [self.dataset[j][1] for j in batch_indices]
+            yield np.array(batch_x), np.array(batch_y)

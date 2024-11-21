@@ -43,6 +43,7 @@ class Conv2d:
         self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
         self.padding_mode = padding_mode
+        self.training = True
 
         # Initialize weights and bias
         self.weight = np.random.randn(out_channels, in_channels, self.kernel_size[0], self.kernel_size[1])
@@ -103,6 +104,12 @@ class Conv2d:
                  (self.padding[1], self.padding[1])),
                 mode='reflect'
             )
+            
+    def train(self):
+        self.training = True
+    
+    def eval(self):
+        self.training = False
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
@@ -224,7 +231,7 @@ class Conv2d:
         return self.forward(x)
 
     def __str__(self):
-        return f"Conv2d({self.in_channels}, {self.out_channels}, {self.kernel_size})"
+        return f"Conv2d({self.in_channels}, {self.out_channels}, {self.kernel_size}, {self.stride})"
 
 
 class ConvTranspose2d:
@@ -695,6 +702,12 @@ class BathNorm1d:
             self.bias_grad = None
 
         self.cache = {}
+        
+    def train(self):
+        self.training = True
+        
+    def eval(self):
+        self.training = False
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         """
@@ -941,6 +954,12 @@ class Dropout:
             return x * mask
         else:
             return x
+        
+    def train(self):
+        self.training = True
+    
+    def eval(self):
+        self.training = False
 
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         """

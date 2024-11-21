@@ -3,12 +3,19 @@ from typing import List, Tuple, Union
 from torchclone.optim import SGD, Adam
 from torchclone.losses import CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss
 import numpy as np
+from torchclone.data import DataLoader
 
-# todo
-# 1. Evaluation and training mode
 
 class Model:
-    def __init__(self, layers):
+    """
+    Model class to hold layers and parameters.
+
+    Parameters:
+    -----------
+    layers: List[Layer]
+        List of layers in the model
+    """
+    def __init__(self, layers: List):
         self.layers = layers
         self.parameters = []
         self.training = True
@@ -20,8 +27,36 @@ class Model:
 
     def __str__(self):
         return "Model's layers:\n--> " + '\n--> '.join([str(layer) for layer in self.layers])
+    
+    def _train_mode(self):
+        self.training = True
+        for layer in self.layers:
+            if hasattr(layer, 'train'):
+                layer.train()
+                
+    def _eval_mode(self):
+        self.training = False
+        for layer in self.layers:
+            if hasattr(layer, 'eval'):
+                layer.eval()
 
-    def train(self, optimizer, criterion, dataloader, num_epochs):
+    def train(self, optimizer: Union[SGD, Adam],criterion: Union[MSELoss, L1Loss, CrossEntropyLoss,
+        BinaryCrossEntropyLoss], dataloader: DataLoader, num_epochs: int, val: DataLoader=None):
+        """
+        Train the model.
+
+        Parameters:
+        -----------
+        optimizer: Union[SGD, Adam]
+            Optimizer to use for training
+        criterion: Union[CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss]
+            Loss function to use
+        dataloader: DataLoader
+            DataLoader object to iterate over the dataset
+        num_epochs: int
+            Number of epochs to train
+        """
+        self._train_mode()
         for epoch in range(num_epochs):
             epoch_loss = 0.0
 
@@ -32,7 +67,54 @@ class Model:
                     pbar.update(1)
 
             avg_epoch_loss = epoch_loss / len(dataloader)
-            print(f"Epoch {epoch + 1}/{num_epochs}, Avg Loss: {avg_epoch_loss:.4f}")
+            print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {avg_epoch_loss:.4f}")
+
+            if val is not None:
+                self._eval_mode()
+                val_loss = self.eval(val, criterion)
+                self._train_mode()
+                print(f"Val Loss: {val_loss:.4f}")
+
+
+    def eval(self, dataloader: DataLoader, criterion: Union[MSELoss, L1Loss, CrossEntropyLoss,
+            BinaryCrossEntropyLoss]):
+            """
+            Evaluate the model.
+
+            Parameters:
+            -----------
+            dataloader: DataLoader
+                DataLoader object to iterate over the dataset
+            criterion: Union[CrossEntropyLoss, MSELoss, L1Loss, BinaryCrossEntropyLoss]
+                Loss function to use
+            """
+            total_loss = 0.0
+
+            for batch in dataloader:
+                x, y = batch
+
+                for layer in self.layers:
+                    x = layer(x)
+
+                loss = criterion.forward(x, y)
+                total_loss += loss
+
+            avg_loss = total_loss / len(dataloader)
+            return avg_loss
+
+    def predict(self, x: np.ndarray):
+        """
+        Predict the output of the model.
+
+        Parameters:
+        -----------
+        x: np.ndarray
+            Input data
+        """
+        for layer in self.layers:
+            x = layer(x)
+
+        return x
 
 
 def train_one_epoch(model: Model,
