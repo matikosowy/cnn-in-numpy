@@ -32,9 +32,8 @@
 ## Implemented Utils
 - ✅ train_one_epoch
 - ✅ train (train_one_epoch + validation)
-- ✅ Model wrapper (combination of Sequential and Module) 
-#### To Do:
-- ⏳ DataLoader
-- ⏳ Dataset
-- ⏳ Model evaluation mode
-- ⏳ Training loop: validation loss
+- ✅ Model wrapper (combination of Sequential and Module)
+- ✅ DataLoader
+- ✅ Dataset
+- ✅ Model evaluation mode
+- ✅ Model predict mode
