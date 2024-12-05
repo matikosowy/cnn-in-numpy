@@ -9,7 +9,7 @@
 - ✅ Dropout
 - ✅ MaxPool2d
 #### To Do:
-- ⏳ ConvTranspose2d
+- ✅ ConvTranspose2d
 
 ## Implemented Activation Functions
 - ✅ ReLU
